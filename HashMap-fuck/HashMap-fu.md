@@ -122,7 +122,97 @@ put执行时首先会计算key的hash值，可以看到是用key对象的hashCod
     }
 ```
 #### 扩容[resize()]逻辑
-
+```
+    final Node<K,V>[] resize() {
+        Node<K,V>[] oldTab = table;
+        int oldCap = (oldTab == null) ? 0 : oldTab.length;
+        int oldThr = threshold;
+        int newCap, newThr = 0;
+        if (oldCap > 0) {
+            if (oldCap >= MAXIMUM_CAPACITY) {
+                threshold = Integer.MAX_VALUE;
+                return oldTab;
+            }
+            else if ((newCap = oldCap << 1) < MAXIMUM_CAPACITY &&
+                     oldCap >= DEFAULT_INITIAL_CAPACITY)
+                newThr = oldThr << 1; // double threshold
+        }
+        //hashMap使用自定义容量构造时，取根据自定义容量计算出的数组大小，这里的oldThr传递了tableSizeFor计算出来的数组大小
+        else if (oldThr > 0) // initial capacity was placed in threshold
+            newCap = oldThr;
+        //初始化hashmap数组大小，putVal中初始化hashmap的容量走这个分支
+        //注意只是赋值了数组大小，负载阈值，真正的数组初始化在下面
+        else {               // zero initial threshold signifies using defaults
+            newCap = DEFAULT_INITIAL_CAPACITY;
+            newThr = (int)(DEFAULT_LOAD_FACTOR * DEFAULT_INITIAL_CAPACITY);
+        }
+        //自定义hashMap容量时，根据指定的容量和指定负载因子，赋值数组大小，负载阈值。
+        if (newThr == 0) {
+            float ft = (float)newCap * loadFactor;
+            newThr = (newCap < MAXIMUM_CAPACITY && ft < (float)MAXIMUM_CAPACITY ?
+                      (int)ft : Integer.MAX_VALUE);
+        }
+        threshold = newThr;
+        @SuppressWarnings({"rawtypes","unchecked"})
+        //使用商品得到的数组大小，初始化数组，这里才是真正初始化数组
+            Node<K,V>[] newTab = (Node<K,V>[])new Node[newCap];
+        table = newTab;
+        //这里初始化时，oldTab为null，直接跳过这个分支 return了。
+        //oldTab不为null 说明是hashmap中已经有数据了，执行真正的扩容逻辑
+        if (oldTab != null) {
+            for (int j = 0; j < oldCap; ++j) {
+                Node<K,V> e;
+                //将旧数组上的节点赋值给新变量e，该索引位置有值走下面逻辑转移到新扩容的数组
+                if ((e = oldTab[j]) != null) {
+                    //已经赋值给了e,将原来的旧数据置null
+                    oldTab[j] = null;
+                    //该索引位置只有一个Node，最简单的分支，直接将计算其在新数组的索引位置，并赋值
+                    if (e.next == null)
+                        newTab[e.hash & (newCap - 1)] = e;
+                    //如果该索引位置是红黑树结构,使用树的逻辑转移节点到新数组
+                    else if (e instanceof TreeNode)
+                        ((TreeNode<K,V>)e).split(this, newTab, j, oldCap);
+                    //该索引位置是链表，用key的hash值与oldCap与操作，如果是0，依然选择原来的索引位置，否则将原来的索引值+oldCap。
+                    else { // preserve order
+                        Node<K,V> loHead = null, loTail = null;
+                        Node<K,V> hiHead = null, hiTail = null;
+                        Node<K,V> next;
+                        //这个循环 实际是把旧数组链表中的每个节点计算新的索引位置（可能在原位，也可能在高位），然后组成两个新的链表（一个low，一个high），挂在不同的索引上。
+                        //期间每次赋值后，都会把loTail.next的值指向自己，所以原有节点的next值都会被覆盖了
+                        do {
+                            next = e.next;
+                            if ((e.hash & oldCap) == 0) {
+                                if (loTail == null)
+                                    loHead = e;
+                                else
+                                    loTail.next = e;
+                                loTail = e;
+                            }
+                            else {
+                                if (hiTail == null)
+                                    hiHead = e;
+                                else
+                                    hiTail.next = e;
+                                hiTail = e;
+                            }
+                        } while ((e = next) != null);
+                        //这里将旧的节点的next值直接赋null，因为链表上所有的节点都重新计算找到了新的位置，以前的next节点就要置null
+                        if (loTail != null) {
+                            loTail.next = null;
+                            newTab[j] = loHead;
+                        }
+                        if (hiTail != null) {
+                            hiTail.next = null;
+                            newTab[j + oldCap] = hiHead;
+                        }
+                    }
+                }
+            }
+        }
+        return newTab;
+    }
+```
+![](链表扩容索引值计算.png)
 ### GET
 ### REMOVE
 ### 遍历
