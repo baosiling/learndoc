@@ -114,6 +114,7 @@ put执行时首先会计算key的hash值，可以看到是用key对象的hashCod
         }
         //每次put操作，modCount++(hashmap迭代时会用到这个字段，fail-fast机制)，size++(hashmap容量>阈值 会扩容)
         ++modCount;
+        //map的容量自增，如果大于阈值 进行扩容操作
         if (++size > threshold)
             resize();
         //linkedHashMap逻辑
@@ -250,6 +251,69 @@ put执行时首先会计算key的hash值，可以看到是用key对象的hashCod
 -   如果索引位置的第一个Node的key就和argument key相等，则返回。
 -   否则继续遍历该索引位置的链表寻找 和argument key相等的Node，直到最后一个节点
 ### REMOVE
+remove方法
+```java
+    //通过key删除hashmap中的节点
+    public V remove(Object key) {
+        Node<K,V> e;
+        return (e = removeNode(hash(key), key, null, false, true)) == null ?
+            null : e.value;
+    }
+
+    //通过key和对应的value删除hashmap中的节点
+    public boolean remove(Object key, Object value) {
+        return removeNode(hash(key), key, value, true, true) != null;
+    }
+
+    final Node<K,V> removeNode(int hash, Object key, Object value,
+                               boolean matchValue, boolean movable) {
+        Node<K,V>[] tab; Node<K,V> p; int n, index;
+        if ((tab = table) != null && (n = tab.length) > 0 &&
+            (p = tab[index = (n - 1) & hash]) != null) {
+            Node<K,V> node = null, e; K k; V v;
+            //此处逻辑，和get方法一致，通过hash和key找到对应的node节点
+            if (p.hash == hash &&
+                ((k = p.key) == key || (key != null && key.equals(k))))
+                node = p;
+            else if ((e = p.next) != null) {
+                if (p instanceof TreeNode)
+                    node = ((TreeNode<K,V>)p).getTreeNode(hash, key);
+                else {
+                    do {
+                        if (e.hash == hash &&
+                            ((k = e.key) == key ||
+                             (key != null && key.equals(k)))) {
+                            node = e;
+                            break;
+                        }
+                        p = e;
+                    } while ((e = e.next) != null);
+                }
+            }            
+            if (node != null && (!matchValue || (v = node.value) == value ||
+                                 (value != null && value.equals(v)))) {
+                //如果节点是树结构，调用树结构方法删除Node
+                if (node instanceof TreeNode)
+                    ((TreeNode<K,V>)node).removeTreeNode(this, tab, movable);
+                //node == p 对应上面找到的索引位置第一个Node就命中的情况，这里直接将第一个Node跳过，index指向后继节点
+                else if (node == p)
+                    tab[index] = node.next;
+                //非上述两种情况就是找到的Node是链表第二个以后的Node的情形了，此时p是命中Node的前驱节点，node是命中的节点，
+                //这的操作直接把Node节点跳过，p.next指向Node的后继节点。
+                else
+                    p.next = node.next;
+                //put,remove都有modCount的增加操作，用于遍历时fail-fast机制
+                ++modCount;
+                //map容量减少1
+                --size;
+                //linkedHashMap操作逻辑
+                afterNodeRemoval(node);
+                return node;
+            }
+        }
+        return null;
+    }
+```
 ### 遍历
 
 ### 参考资料
