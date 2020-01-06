@@ -1,13 +1,13 @@
 ### 构造方法
 ![](静态常量.png)
 ![](Fields.png)
-```
+```java
     int threshold;
     final float loadFactor;
 ```
 
 最常用的是下面两个
-```
+```java
     Map<String,String> map = new HashMap<>(16);
     Map<String,String> map = new HashMap<>();
 
@@ -20,7 +20,7 @@
 ```
 这两个方法 赋值了初始容量initialCapacity、负载因子loadFactor
 这里调用了一个方法来计算容量cap的大小
-```
+```java
     /**
      * Returns a power of two size for the given target capacity.
      */
@@ -42,7 +42,7 @@ cap-1 的目的是如果cap本身是2的整数幂能保证返回结果就是它�
 以上是构造方法的逻辑，**就是确定数组的初始容量大小以及负载因子，但是并没有初始化Node<K,V>[] table。**
 ### PUT
 put的内容比较多，逻辑相对复杂 重写AbstractMap的put方法
-```
+```java
     public V put(K key, V value)
 
     static final int hash(Object key) {
@@ -62,7 +62,7 @@ put执行时首先会计算key的hash值，可以看到是用key对象的hashCod
 再看h>216次幂，右移16位后，低16位都变为0，高16位转移到低16位，再与自身异或，这样的效果就是 **自己的高半区和低半区做异或，就是为了混合原始哈希码的高位和低位，以此来加大低位的随机性**
 -   有了hash值，再看剩下的逻辑
 #### put逻辑
-```
+```java
     final V putVal(int hash, K key, V value, boolean onlyIfAbsent,
                    boolean evict) {
         Node<K,V>[] tab; Node<K,V> p; int n, i;
@@ -122,7 +122,7 @@ put执行时首先会计算key的hash值，可以看到是用key对象的hashCod
     }
 ```
 #### 扩容[resize()]逻辑
-```
+```java
     final Node<K,V>[] resize() {
         Node<K,V>[] oldTab = table;
         int oldCap = (oldTab == null) ? 0 : oldTab.length;
@@ -214,6 +214,41 @@ put执行时首先会计算key的hash值，可以看到是用key对象的hashCod
 ```
 ![](链表扩容索引值计算.png)
 ### GET
+```java
+    public V get(Object key) {
+        Node<K,V> e;
+        return (e = getNode(hash(key), key)) == null ? null : e.value;
+    }
+
+    final Node<K,V> getNode(int hash, Object key) {
+        Node<K,V>[] tab; Node<K,V> first, e; int n; K k;
+        if ((tab = table) != null && (n = tab.length) > 0 &&
+            (first = tab[(n - 1) & hash]) != null) {
+            //大部分GET的情况，都会走这个分支，大多数是一个索引位置只有一个Node的情况
+            if (first.hash == hash && // always check first node
+                ((k = first.key) == key || (key != null && key.equals(k))))
+                return first;
+            //没找到就会遍历链表或树了
+            if ((e = first.next) != null) {
+                //如果是树节点，使用树的方式查找
+                if (first instanceof TreeNode)
+                    return ((TreeNode<K,V>)first).getTreeNode(hash, key);
+                //不是树则是链表结构，遍历链表查找key相等的节点
+                do {
+                    if (e.hash == hash &&
+                        ((k = e.key) == key || (key != null && key.equals(k))))
+                        return e;
+                } while ((e = e.next) != null);
+            }
+        }
+        return null;
+    }    
+```
+-   get的逻辑相对比较简单，和put同样的也要确定数组的索引位置
+-   使用put方法使用的hash(key) 计算key的hash值
+-   通过hash对数组length取模，得到索引
+-   如果索引位置的第一个Node的key就和argument key相等，则返回。
+-   否则继续遍历该索引位置的链表寻找 和argument key相等的Node，直到最后一个节点
 ### REMOVE
 ### 遍历
 
