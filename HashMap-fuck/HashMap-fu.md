@@ -1,3 +1,4 @@
+[toc]
 ### 构造方法
 ![](静态常量.png)
 ![](Fields.png)
@@ -315,14 +316,105 @@ remove方法
     }
 ```
 ### 遍历
+HashMap的遍历方式有这么几种
+-   迭代器方式
+    -   得到所有的key
+    ```java
+    Set<String> keySet = map.keySet();
+    ```
+    -   得到所有的value
+    ```java
+    Collection<String> valueSet = map.values();
+    ```
+    -   得到所有的键值对
+    ```java
+    Set<Map.Entry<String,String>> entrySet = map.entrySet();
+    ```
+-   lambda遍历
+```java
+map.forEach((k,v)->{
+    //TODO something to do
+    });
+```
+lambda表达式遍历，EntrySet自己实现了forEach方法，前三种有类似之处，这里以entrySet来说明。
+通过entrySet()方法的源码，发现是返回一个新创建的EntrySet对象，然而遍历的时候依靠这个entrySet的iterator迭代指向的是父类HashMap的table数组。
+```java
+    public Set<Map.Entry<K,V>> entrySet() {
+        Set<Map.Entry<K,V>> es;
+        return (es = entrySet) == null ? (entrySet = new EntrySet()) : es;
+    }
+
+    final class EntrySet extends AbstractSet<Map.Entry<K,V>> {
+        public final int size()                 { return size; }
+        public final void clear()               { HashMap.this.clear(); }
+        public final Iterator<Map.Entry<K,V>> iterator() {
+            return new EntryIterator();
+        }
+        //...
+    }
+
+    final class EntryIterator extends HashIterator
+        implements Iterator<Map.Entry<K,V>> {
+        public final Map.Entry<K,V> next() { return nextNode(); }
+    }
+
+
+    //构造方法中赋值next
+    HashIterator() {
+        expectedModCount = modCount;
+        Node<K,V>[] t = table;
+        current = next = null;
+        index = 0;
+        //找到第一个不为null的索引位置
+        if (t != null && size > 0) { // advance to first entry
+            do {} while (index < t.length && (next = t[index++]) == null);
+        }
+    }
+
+    final Node<K,V> nextNode() {
+        Node<K,V>[] t;
+        Node<K,V> e = next;
+        if (modCount != expectedModCount)
+            throw new ConcurrentModificationException();
+        //第一次进入，构造方法中已经给next赋值，所以如果这个table不为空的话，e肯定有值;
+        if (e == null)
+            throw new NoSuchElementException();
+        //if中的语句赋值链表下一个节点给next；直到链表最后的节点为null时，再进行下一个索引位置的遍历
+        if ((next = (current = e).next) == null && (t = table) != null) {
+            do {} while (index < t.length && (next = t[index++]) == null);
+        }
+        return e;
+    }
+```
+-   EntrySet的主要逻辑:
+EntrySet是HashMap的内部类，继承了AbstractSet,而AbstractSet继承了AbstractCollection，
+EntrySet.iterator()=>new EntryIterator()=>iterator遍历会走next()=>nextNode()=>HashIterator中的nextNode()方法，最终nextNode()这个方法是遍历entrySet的最关键逻辑。
+而keySet和values是通过KeyIterator，ValueIterator来实现的，这两个类都继承了HashIterator，借助nextNode()方法得到key值和value值
+-   HashMap的entrySet()代码中entrySet变量并未赋值，但在debug时发现entrySet变量是有值的，查阅资料发现idea中变量值是通过调用对象的toString()方法来得到的，entrySet的toString()方法实际是AbstractCollection类的toString()方法，里面的逻辑是通过iterator遍历了entrySet，最终是调用到nextNode()方法的。
+-   使用for循环遍历实际也是通过iterator遍历的
+原始代码
+    ```java
+    for(Map.Entry<String,String> node : entrySet){
+        System.out.println(node);
+    }
+    ```
+    编译后代码
+    ```java
+    Iterator var3 = entrySet.iterator();
+
+    while(var3.hasNext()) {
+        Entry<String, String> node = (Entry)var3.next();
+        System.out.println(node);
+    } 
+    ```
 
 ### 参考资料
->https://www.cnblogs.com/lycroseup/p/7344321.html
-https://blog.csdn.net/anxpp/article/details/51234835
-https://blog.csdn.net/qq_38182963/article/details/78940047
-https://www.cnblogs.com/loading4/p/6239441.html
-https://my.oschina.net/u/232911/blog/2872356
-https://www.javadoop.com/post/hashmap
-https://www.jianshu.com/p/bdfd5f98cc31
-https://blog.csdn.net/u013494765/article/details/77837338
-
+>[HashMap之扰动函数和低位掩码 - 望川拓 - 博客园](https://www.cnblogs.com/lycroseup/p/7344321.html)
+[HashMap源码之hash()函数分析（JDK 1.8）_anxpp的博客-CSDN博客](https://blog.csdn.net/anxpp/article/details/51234835)
+[浅显理解 hashcode 和 hash 算法_ignore-CSDN博客](https://blog.csdn.net/qq_38182963/article/details/78940047)
+[Java8 HashMap之tableSizeFor - 兴趣使然~ - 博客园](https://www.cnblogs.com/loading4/p/6239441.html)
+[Java集合--tableSizeFor - gaob2001的个人空间 - OSCHINA](https://my.oschina.net/u/232911/blog/2872356)
+[Java7/8 中的 HashMap 和 ConcurrentHashMap 全解析_Javadoop](https://www.javadoop.com/post/hashmap)
+[JDK 1.8 中 HashMap 扩容 - 简书](https://www.jianshu.com/p/bdfd5f98cc31)
+[Java 1.8中HashMap的resize()方法扩容部分的理解_大学以后的博客-CSDN博客](https://blog.csdn.net/u013494765/article/details/77837338)
+[遍历 Map 中 EntrySet 集合一点思考。 - 简书](https://www.jianshu.com/p/ed62c86f611c)
